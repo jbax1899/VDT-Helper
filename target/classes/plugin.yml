@@ -1,5 +1,5 @@
 name: VDT-Helper
-main: com.jordanmakes.vdthelper.VDTHelperPlugin
+main: com.jordanmakes.vdthelper.VDTHelper
 version: 1.0.0
 api: "1.21"
 description: Helper for ViewDistanceTweaks that reduces view distance for vacant dimensions

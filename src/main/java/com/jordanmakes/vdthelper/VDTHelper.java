@@ -88,7 +88,13 @@ public class VDTHelper extends JavaPlugin implements Listener {
                 worldVacatedAt.putIfAbsent(worldName, now);
                 shouldSchedule = true;
             } else {
-                // A player is there, cancel vacancy state
+                // A player is here AND the world was previously empty → reload needed
+                if (worldVacatedAt.containsKey(worldName)) {
+                    getLogger().info(() -> "World " + worldName + " is now populated. Reloading VDT...");
+                    runCommand("viewdistancetweaks reload");
+                }
+
+                // clear vacancy state
                 worldVacatedAt.remove(worldName);
             }
         }
