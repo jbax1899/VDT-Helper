@@ -49,7 +49,6 @@ public class VDTHelper extends JavaPlugin implements Listener {
     }
 
     // === EVENT TRIGGERS ===
-    // 1-second/20-tick wait to account for processing delays
 
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
@@ -78,6 +77,7 @@ public class VDTHelper extends JavaPlugin implements Listener {
     }
 
     private void scheduleCheck() {
+        // 1-second/20-tick wait to account for processing delays
         Bukkit.getScheduler().runTaskLater(this, this::handleVacancyChange, 20L);
     }
 
