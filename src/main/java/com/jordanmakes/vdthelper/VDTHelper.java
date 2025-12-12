@@ -13,7 +13,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public class VDTHelperPlugin extends JavaPlugin implements Listener {
+public class VDTHelper extends JavaPlugin implements Listener {
 
     private final Map<String, Integer> vacantView = new HashMap<>(); // Minimum view distance per world
     private final Map<String, Integer> vacantSim = new HashMap<>(); // Minimum simulation distance per world
@@ -105,22 +105,35 @@ public class VDTHelperPlugin extends JavaPlugin implements Listener {
 
     private void checkVacantWorlds() {
         long now = System.currentTimeMillis();
+        boolean shouldReloadVDT = false;
 
+        // Pass 1: detect populated worlds that were previously vacant
         for (String worldName : vacantView.keySet()) {
-
             World w = Bukkit.getWorld(worldName);
             if (w == null) {
                 getLogger().warning(() -> "World not found, skipping: " + worldName);
                 continue;
             }
 
-            // Not empty anymore - skip
             if (!w.getPlayers().isEmpty()) {
-                // World now has players; restore VDT automatic control
-                runCommand("viewdistancetweaks reload");
+                if (worldVacatedAt.containsKey(worldName)) {
+                    shouldReloadVDT = true;
+                }
                 worldVacatedAt.remove(worldName);
-                continue;
             }
+        }
+
+        if (shouldReloadVDT) {
+            getLogger().info("A world became populated. Reloading ViewDistanceTweaks...");
+            runCommand("viewdistancetweaks reload");
+        }
+
+        // Pass 2: apply reductions after any required reload
+        for (String worldName : vacantView.keySet()) {
+            World w = Bukkit.getWorld(worldName);
+            if (w == null) continue;
+
+            if (!w.getPlayers().isEmpty()) continue;
 
             // Was this world marked as vacant?
             Long whenVacant = worldVacatedAt.get(worldName);
