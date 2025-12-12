@@ -32,7 +32,8 @@ public class VDTHelperPlugin extends JavaPlugin implements Listener {
 
         Bukkit.getPluginManager().registerEvents(this, this);
 
-        getLogger().info("VDT Helper enabled.");
+        getLogger().info("VDT Helper enabled. Running initial vacancy checks...");
+        handleVacancyChange();
     }
 
     private void loadConfigValues() {
