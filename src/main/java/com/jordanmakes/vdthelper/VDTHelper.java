@@ -2,7 +2,6 @@ package com.jordanmakes.vdthelper;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -20,7 +19,6 @@ public class VDTHelper extends JavaPlugin implements Listener {
     private final Map<String, Integer> vacantView = new HashMap<>(); // Minimum view distance per world
     private final Map<String, Integer> vacantSim = new HashMap<>(); // Minimum simulation distance per world
     private final Map<String, Long> worldVacatedAt = new HashMap<>(); // last time a world was vacated
-    private final Map<UUID, String> lastWorld = new HashMap<>(); // last known world per player
 
     private int cooldownTicks; // time in ticks since a world became vacant before applying reductions
 
@@ -52,28 +50,22 @@ public class VDTHelper extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
-        lastWorld.put(e.getPlayer().getUniqueId(), e.getPlayer().getWorld().getName());
         scheduleCheck();
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
-        lastWorld.remove(e.getPlayer().getUniqueId());
         scheduleCheck();
     }
 
     @EventHandler
     public void onChange(PlayerChangedWorldEvent e) {
-        lastWorld.put(e.getPlayer().getUniqueId(), e.getPlayer().getWorld().getName());
         scheduleCheck();
     }
 
     @EventHandler
     public void onTeleport(PlayerTeleportEvent e) {
-        if (e.getFrom().getWorld() != e.getTo().getWorld()) {
-            lastWorld.put(e.getPlayer().getUniqueId(), e.getTo().getWorld().getName());
-            scheduleCheck();
-        }
+        scheduleCheck();
     }
 
     private void scheduleCheck() {
@@ -96,20 +88,15 @@ public class VDTHelper extends JavaPlugin implements Listener {
             }
             getLogger().info(() -> "DEBUG: world=" + worldName + " players=" + w.getPlayers().size());
 
-            boolean trulyEmpty = w.getPlayers().isEmpty()
-                && lastWorld.values().stream().noneMatch(worldName::equals);
+            boolean empty = w.getPlayers().isEmpty();
 
-            if (trulyEmpty) {
+            if (empty) {
                 // Mark the time it became empty (only if newly empty)
                 worldVacatedAt.putIfAbsent(worldName, now);
-            } else {
-                // A player is here AND the world was previously empty → reload needed
-                if (worldVacatedAt.containsKey(worldName)) {
-                    getLogger().info(() -> "World " + worldName + " is now populated. Reloading VDT...");
-                    runCommand("viewdistancetweaks reload");
-                }
-
-                // clear vacancy state
+            } else if (worldVacatedAt.containsKey(worldName)) {
+                // A player is here AND the world was previously empty -> reload needed
+                getLogger().info(() -> "World " + worldName + " is now populated. Reloading VDT...");
+                runCommand("viewdistancetweaks reload");
                 worldVacatedAt.remove(worldName);
             }
         }
@@ -122,9 +109,8 @@ public class VDTHelper extends JavaPlugin implements Listener {
 
     private void checkVacantWorlds() {
         long now = System.currentTimeMillis();
-        boolean shouldReloadVDT = false;
 
-        // Pass 1: detect populated worlds that were previously vacant
+        // Clean up any worlds that now have players; population reloads are handled immediately in handleVacancyChange
         for (String worldName : vacantView.keySet()) {
             World w = Bukkit.getWorld(worldName);
             if (w == null) {
@@ -132,17 +118,7 @@ public class VDTHelper extends JavaPlugin implements Listener {
                 continue;
             }
 
-            if (!w.getPlayers().isEmpty()) {
-                if (worldVacatedAt.containsKey(worldName)) {
-                    shouldReloadVDT = true;
-                }
-                worldVacatedAt.remove(worldName);
-            }
-        }
-
-        if (shouldReloadVDT) {
-            getLogger().info("A world became populated. Reloading ViewDistanceTweaks...");
-            runCommand("viewdistancetweaks reload");
+            if (!w.getPlayers().isEmpty()) worldVacatedAt.remove(worldName);
         }
 
         boolean willReduce = false;
