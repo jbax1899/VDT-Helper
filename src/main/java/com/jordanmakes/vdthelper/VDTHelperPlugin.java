@@ -116,6 +116,9 @@ public class VDTHelperPlugin extends JavaPlugin implements Listener {
 
             // Not empty anymore - skip
             if (!w.getPlayers().isEmpty()) {
+                // World now has players; restore VDT automatic control
+                runCommand("viewdistancetweaks reload");
+                worldVacatedAt.remove(worldName);
                 continue;
             }
 
