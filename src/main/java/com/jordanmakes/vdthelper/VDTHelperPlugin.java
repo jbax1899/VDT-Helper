@@ -73,6 +73,7 @@ public class VDTHelperPlugin extends JavaPlugin implements Listener {
     */
     private void handleVacancyChange() {
         long now = System.currentTimeMillis();
+        boolean shouldSchedule = false;
 
         for (String worldName : vacantView.keySet()) {
             World w = Bukkit.getWorld(worldName);
@@ -84,15 +85,19 @@ public class VDTHelperPlugin extends JavaPlugin implements Listener {
             if (w.getPlayers().isEmpty()) {
                 // Mark the time it became empty (only if newly empty)
                 worldVacatedAt.putIfAbsent(worldName, now);
+                shouldSchedule = true;
             } else {
                 // A player is there, cancel vacancy state
                 worldVacatedAt.remove(worldName);
             }
         }
 
-        // Create a task to check if any worlds remain vacant after the cooldown period,
-        // at which point we can apply the distance reductions.
-        Bukkit.getScheduler().runTaskLater(this, this::checkVacantWorlds, cooldownTicks);
+        // If any world became vacant,
+        if (shouldSchedule) {
+            // Create a task to check if any worlds remain vacant after the cooldown period,
+            // at which point we can apply the distance reductions.
+            Bukkit.getScheduler().runTaskLater(this, this::checkVacantWorlds, cooldownTicks);
+        }
     }
 
     // === CORE LOGIC ===
