@@ -2,6 +2,7 @@ package com.jordanmakes.vdthelper;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.World;
@@ -11,6 +12,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class VDTHelper extends JavaPlugin implements Listener {
@@ -18,6 +20,7 @@ public class VDTHelper extends JavaPlugin implements Listener {
     private final Map<String, Integer> vacantView = new HashMap<>(); // Minimum view distance per world
     private final Map<String, Integer> vacantSim = new HashMap<>(); // Minimum simulation distance per world
     private final Map<String, Long> worldVacatedAt = new HashMap<>(); // last time a world was vacated
+    private final Map<UUID, String> lastWorld = new HashMap<>(); // last known world per player
 
     private int cooldownTicks; // time in ticks since a world became vacant before applying reductions
 
@@ -31,9 +34,6 @@ public class VDTHelper extends JavaPlugin implements Listener {
         loadConfigValues();
 
         Bukkit.getPluginManager().registerEvents(this, this);
-
-        getLogger().info("VDT Helper enabled. Running initial vacancy checks...");
-        handleVacancyChange();
     }
 
     private void loadConfigValues() {
@@ -49,23 +49,36 @@ public class VDTHelper extends JavaPlugin implements Listener {
     }
 
     // === EVENT TRIGGERS ===
+    // 1-second/20-tick wait to account for processing delays
 
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
-        // Clears the cooldown for the joined world if it was previously vacant
-        handleVacancyChange();
+        lastWorld.put(e.getPlayer().getUniqueId(), e.getPlayer().getWorld().getName());
+        scheduleCheck();
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
-        // Checks if the player's world has become empty after they left
-        handleVacancyChange();
+        lastWorld.remove(e.getPlayer().getUniqueId());
+        scheduleCheck();
     }
 
     @EventHandler
     public void onChange(PlayerChangedWorldEvent e) {
-        // Checks if the player's previous world has become empty after they left
-        handleVacancyChange();
+        lastWorld.put(e.getPlayer().getUniqueId(), e.getPlayer().getWorld().getName());
+        scheduleCheck();
+    }
+
+    @EventHandler
+    public void onTeleport(PlayerTeleportEvent e) {
+        if (e.getFrom().getWorld() != e.getTo().getWorld()) {
+            lastWorld.put(e.getPlayer().getUniqueId(), e.getTo().getWorld().getName());
+            scheduleCheck();
+        }
+    }
+
+    private void scheduleCheck() {
+        Bukkit.getScheduler().runTaskLater(this, this::handleVacancyChange, 20L);
     }
 
     /*
@@ -74,19 +87,21 @@ public class VDTHelper extends JavaPlugin implements Listener {
     */
     private void handleVacancyChange() {
         long now = System.currentTimeMillis();
-        boolean shouldSchedule = false;
-
+        
         for (String worldName : vacantView.keySet()) {
             World w = Bukkit.getWorld(worldName);
             if (w == null) {
                 getLogger().warning(() -> "World not found, skipping: " + worldName);
                 continue;
             }
+            getLogger().info(() -> "DEBUG: world=" + worldName + " players=" + w.getPlayers().size());
 
-            if (w.getPlayers().isEmpty()) {
+            boolean trulyEmpty = w.getPlayers().isEmpty()
+                && lastWorld.values().stream().noneMatch(worldName::equals);
+
+            if (trulyEmpty) {
                 // Mark the time it became empty (only if newly empty)
                 worldVacatedAt.putIfAbsent(worldName, now);
-                shouldSchedule = true;
             } else {
                 // A player is here AND the world was previously empty → reload needed
                 if (worldVacatedAt.containsKey(worldName)) {
@@ -99,12 +114,8 @@ public class VDTHelper extends JavaPlugin implements Listener {
             }
         }
 
-        // If any world became vacant,
-        if (shouldSchedule) {
-            // Create a task to check if any worlds remain vacant after the cooldown period,
-            // at which point we can apply the distance reductions.
-            Bukkit.getScheduler().runTaskLater(this, this::checkVacantWorlds, cooldownTicks);
-        }
+        // Evaluate reductions after cooldown
+        Bukkit.getScheduler().runTaskLater(this, this::checkVacantWorlds, cooldownTicks);
     }
 
     // === CORE LOGIC ===
@@ -134,7 +145,37 @@ public class VDTHelper extends JavaPlugin implements Listener {
             runCommand("viewdistancetweaks reload");
         }
 
-        // Pass 2: apply reductions after any required reload
+        boolean willReduce = false;
+        for (String worldName : vacantView.keySet()) {
+            World w = Bukkit.getWorld(worldName);
+            if (w == null) continue;
+
+            if (!w.getPlayers().isEmpty()) continue;
+
+            Long whenVacant = worldVacatedAt.get(worldName);
+            if (whenVacant == null) continue;
+
+            long elapsed = now - whenVacant;
+            if (elapsed >= (cooldownTicks * 50L)) {
+                willReduce = true;
+                break;
+            }
+        }
+
+        if (willReduce) {
+            getLogger().info("Preparing reductions. Reloading ViewDistanceTweaks...");
+            runCommand("viewdistancetweaks reload");
+
+            // Delay reduction pass by 10 ticks to let VDT finish reloading
+            Bukkit.getScheduler().runTaskLater(this, () -> applyReductions(System.currentTimeMillis()), 10L);
+            return;
+        }
+
+        // Pass 2: apply reductions when no delayed reload is pending
+        applyReductions(now);
+    }
+
+    private void applyReductions(long now) {
         for (String worldName : vacantView.keySet()) {
             World w = Bukkit.getWorld(worldName);
             if (w == null) continue;

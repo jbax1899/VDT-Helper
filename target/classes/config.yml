@@ -1,5 +1,5 @@
 # Time to wait (in seconds) after a dimension becomes empty before applying reductions
-cooldown-seconds: 10
+cooldown-seconds: 0
 
 # Per-world vacant minimum distances
 worlds:
