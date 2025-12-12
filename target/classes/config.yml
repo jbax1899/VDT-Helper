@@ -1,0 +1,16 @@
+# Time to wait (in seconds) after a dimension becomes empty before applying reductions
+cooldown-seconds: 10
+
+# Per-world vacant minimum distances
+worlds:
+  world:
+    view-distance: 3
+    simulation-distance: 2
+
+  world_nether:
+    view-distance: 3
+    simulation-distance: 2
+
+  world_the_end:
+    view-distance: 3
+    simulation-distance: 2
