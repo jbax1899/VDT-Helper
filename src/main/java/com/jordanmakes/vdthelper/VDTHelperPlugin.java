@@ -115,16 +115,12 @@ public class VDTHelperPlugin extends JavaPlugin implements Listener {
 
             // Not empty anymore - skip
             if (!w.getPlayers().isEmpty()) {
-                getLogger().info(() -> worldName + " is no longer empty, skipping reduction.");
                 continue;
-            } 
+            }
 
             // Was this world marked as vacant?
             Long whenVacant = worldVacatedAt.get(worldName);
-            if (whenVacant == null) {
-                getLogger().warning(() -> "Skipping " + worldName + " as it was never marked as vacant.");
-                continue;
-            }
+            if (whenVacant == null) continue;
 
             // Has cooldown passed?
             long elapsed = now - whenVacant;
@@ -144,8 +140,8 @@ public class VDTHelperPlugin extends JavaPlugin implements Listener {
     // === CALL VDT COMMANDS ===
 
     private void applyVDT(String world, int view, int sim) {
-        runCommand("viewdistancetweaks setviewdistance " + world + " " + view);
-        runCommand("viewdistancetweaks setsimulationdistance " + world + " " + sim);
+        runCommand("viewdistancetweaks viewdistance " + view + " " + world);
+        runCommand("viewdistancetweaks simulationdistance " + sim + " " + world);
     }
 
     private void runCommand(String cmd) {
